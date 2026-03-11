@@ -53,7 +53,7 @@ Standard SGLang installation via pip pulls generic wheels and a pre-built PyTorc
 | SM90 | Hopper | H100, H200, L40S | `sm90-avx2` | `sm90-avx512` |
 | SM100 | Blackwell DC | B100, B200, GB200 | `sm100-avx2` | `sm100-avx512` |
 | SM120 | Blackwell | RTX 5090, RTX PRO 6000 | `sm120-avx2` | `sm120-avx512` |
-| **all** | **SM61–SM120** | **P40 through RTX 5090** | `all-avx2` | `all-avx512` |
+| **all** | **SM75–SM120** | **T4 through RTX 5090** | `all-avx2` | `all-avx512` |
 
 Variant names are prefixed with `sglang-python312-cuda12_8-`.
 
@@ -98,7 +98,7 @@ flox build sglang-python312-cuda12_8-all-avx2
 
 ### Or use the universal "all" variant
 
-Use `all-avx2` or `all-avx512` for development, testing, or multi-GPU-type clusters. These variants compile PyTorch with all SM architectures (6.1–12.0) so the same binary works on any GPU from P40 to RTX 5090. The tradeoff is cuDNN is disabled (SM61 inclusion requires it) and build time is ~8x longer than single-SM variants.
+Use `all-avx2` or `all-avx512` for development, testing, or multi-GPU-type clusters. These variants compile PyTorch with SM architectures 7.5–12.0 so the same binary works on any GPU from T4 to RTX 5090. Build time is ~7x longer than single-SM variants. Pascal (SM61) is excluded to preserve cuDNN support — use the dedicated `sm61` variants for P40/GTX 1080 Ti.
 
 ### Step 2: Choose your CPU ISA
 
@@ -134,8 +134,8 @@ SGLang builds use a **wheel-composition** approach — unlike vLLM which builds 
 │   ├── sgl-kernel.nix       # sgl-kernel CUDA kernel library
 │   ├── sglang-pkg.nix       # SGLang wheel with pythonRemoveDeps
 │   └── xgrammar.nix         # xgrammar structured output engine
-├── sglang-python312-cuda12_8-all-avx2.nix     # All SMs (SM61–SM120) + AVX2, no cuDNN
-├── sglang-python312-cuda12_8-all-avx512.nix   # All SMs (SM61–SM120) + AVX-512, no cuDNN
+├── sglang-python312-cuda12_8-all-avx2.nix     # All SMs (SM75–SM120) + AVX2
+├── sglang-python312-cuda12_8-all-avx512.nix   # All SMs (SM75–SM120) + AVX-512
 ├── sglang-python312-cuda12_8-sm61-avx2.nix    # SM61 + AVX2 variant
 ├── sglang-python312-cuda12_8-sm61-avx512.nix  # SM61 + AVX-512 variant
 ├── ...                                         # SM75, SM80, SM86, SM89, SM100, SM120
@@ -174,7 +174,7 @@ sglang-python312-cuda12_8-sm90-avx512        (variant entry point)
 ## Build Notes
 
 - **SM61 (Pascal)**: Uses `USE_CUDNN=0` — cuDNN 9.11+ dropped support for SM < 7.5
-- **"all" variants**: Also use `USE_CUDNN=0` because SM61 is included; cuDNN is not needed for LLM inference (SGLang uses FlashInfer/sgl-kernel for attention). Build time is ~8x longer than single-SM variants since PyTorch compiles CUDA kernels for all 8 SM architectures
+- **"all" variants**: Cover SM75–SM120 (7 architectures). SM61 is excluded to preserve cuDNN support. Build time is ~7x longer than single-SM variants
 - **sgl-kernel**: `autoPatchelfHook` needs `cuda_nvrtc` and `numactl` — discovered via runtime audit of `libnvrtc.so.12` and `libnuma.so.1` dependencies in the mscclpp and sm90/common_ops shared objects
 - **FlashInfer**: Split into three wheels — `flashinfer-cubin` (9262 `.cubin` files, pure Python), `flashinfer-jit-cache` (compiled `.so` extensions, needs autoPatchelf against CUDA runtime), and `flashinfer-python` (pure Python frontend that propagates both)
 - **FlashInfer JIT at runtime**: FlashInfer may attempt JIT compilation at runtime; set `FLASHINFER_JIT_DIR` to a writable path since the Nix store is read-only

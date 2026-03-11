@@ -1,9 +1,9 @@
-# SGLang 0.5.9 — all GPU architectures (SM61–SM120) — AVX-512
+# SGLang 0.5.9 — all GPU architectures (SM75–SM120) — AVX-512
 # CUDA 12.8 — Requires NVIDIA driver 550+
-# Custom PyTorch built from source (all SMs + AVX-512, USE_CUDNN=0)
+# Custom PyTorch built from source (all SMs + AVX-512)
 { pkgs ? import <nixpkgs> {} }:
 let
-  allCapabilities = [ "6.1" "7.5" "8.0" "8.6" "8.9" "9.0" "10.0" "12.0" ];
+  allCapabilities = [ "7.5" "8.0" "8.6" "8.9" "9.0" "10.0" "12.0" ];
 
   nixpkgs_pinned = import (builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/0182a361324364ae3f436a63005877674cf45efb.tar.gz";
@@ -31,7 +31,6 @@ let
         gpuTargets = allCapabilities;
         smTag = "all";
         cudaVersionTag = "cuda12_8";
-        extraPreConfigure = "export USE_CUDNN=0";
       };
     };
   };
@@ -69,7 +68,7 @@ in
     pname = variantName;
     requiredSystemFeatures = [ "big-parallel" ];
     meta = oldAttrs.meta // {
-      description = "SGLang 0.5.9 for all NVIDIA GPUs SM61-SM120 [CUDA 12.8, custom PyTorch AVX-512, no cuDNN]";
+      description = "SGLang 0.5.9 for all NVIDIA GPUs SM75-SM120 [CUDA 12.8, custom PyTorch AVX-512]";
       platforms = [ platform ];
     };
   })
