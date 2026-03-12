@@ -65,20 +65,51 @@ Variant names are prefixed with `sglang-python312-cuda12_8-`.
 # Build a variant (H100/H200 + AVX-512)
 flox build sglang-python312-cuda12_8-sm90-avx512
 
-# Or build the universal "all" variant (works on any GPU from P40 to RTX 5090)
+# Or build the universal "all" variant (works on any GPU from T4 to RTX 5090)
 flox build sglang-python312-cuda12_8-all-avx2
 
 # The output is in result-<variant-name>/
-# Test it
-./result-sglang-python312-cuda12_8-sm90-avx512/bin/python -c "import sglang; print(sglang.__version__)"
+# Test the sglang CLI wrapper
+./result-sglang-python312-cuda12_8-sm90-avx512/bin/sglang --help
 
-# Check GPU support
-./result-sglang-python312-cuda12_8-sm90-avx512/bin/python -c "import torch; print(torch.cuda.is_available())"
+# For full Python access (import sglang, torch, etc.), use a runtime environment
+# See "Runtime Environments" below
+```
 
-# Launch an SGLang server
-./result-sglang-python312-cuda12_8-sm90-avx512/bin/python -m sglang.launch_server \
+## Runtime Environments
+
+Build output contains only a `sglang` CLI wrapper — there is no `bin/python`. To get a full Python environment with `import sglang`, `import torch`, etc., use a **Flox runtime environment** that wraps the build's store path.
+
+### Two-step workflow
+
+1. **Build**: `flox build sglang-python312-cuda12_8-all-avx2` produces a store path
+2. **Runtime**: A Flox environment in `runtime-all-avx2/` wraps that store path with `PYTHONPATH` constructed from its full Nix closure
+
+### Using the runtime environment
+
+```bash
+cd runtime-all-avx2
+flox activate
+
+python3.12 -c "import sglang; print(sglang.__version__)"
+python3.12 -c "import torch; print(torch.cuda.is_available())"
+python3.12 -m sglang.launch_server \
   --model-path meta-llama/Llama-3.1-8B-Instruct \
   --port 30000
+```
+
+See [`runtime-all-avx2/README.md`](runtime-all-avx2/README.md) for full details.
+
+### After rebuilds
+
+The store path changes on every rebuild. Update the runtime manifest:
+
+```bash
+# Find the new store path
+readlink result-sglang-python312-cuda12_8-all-avx2
+
+# Update SGLANG_STORE_PATH (and SGLANG_PYTHON if needed) in:
+#   runtime-all-avx2/.flox/env/manifest.toml
 ```
 
 ## Variant Selection Guide
@@ -141,6 +172,9 @@ SGLang builds use a **wheel-composition** approach — unlike vLLM which builds 
 ├── ...                                         # SM75, SM80, SM86, SM89, SM100, SM120
 ├── sglang-python312-cuda12_8-sm90-avx2.nix    # SM90 + AVX2 variant
 └── sglang-python312-cuda12_8-sm90-avx512.nix  # SM90 + AVX-512 variant
+
+runtime-all-avx2/                                # Flox runtime environment
+└── .flox/env/manifest.toml                      # Wraps all-avx2 store path with PYTHONPATH
 ```
 
 ## Dependency Graph
@@ -180,6 +214,8 @@ sglang-python312-cuda12_8-sm90-avx512        (variant entry point)
 - **FlashInfer JIT at runtime**: FlashInfer may attempt JIT compilation at runtime; set `FLASHINFER_JIT_DIR` to a writable path since the Nix store is read-only
 - **xgrammar**: C++ extensions only (`libstdc++`), no CUDA linkage at the `.so` level — simpler autoPatchelf with just `stdenv.cc.cc.lib`
 - **pythonRemoveDeps**: SGLang declares ~60 dependencies, many not available in nixpkgs (apache-tvm-ffi, nvidia-cutlass-dsl, quack-kernels, openai-harmony, etc.); all `Requires-Dist` metadata is stripped and the ~30 deps needed for core LLM serving are explicitly listed in `propagatedBuildInputs`
+- **Ninja setup hook hijacking**: Torch's Python ninja package installs a Nix setup hook that hijacks `buildPhase` for downstream wheel packages. All wheel packages (sglang, sgl-kernel, FlashInfer cubin/jit-cache, xgrammar) use `dontUseNinjaBuild = true`, `dontUseNinjaInstall = true`, and `dontUseCmakeConfigure = true` to prevent this
+- **pythonImportsCheck disabled**: Disabled for sgl-kernel (needs `libcuda.so.1` at import time), flashinfer-jit-cache and flashinfer-python (need `libcuda.so.1`), and xgrammar (transitive deps `transformers`/`pydantic` not available during the build check phase). flashinfer-cubin and sglang retain their import checks
 
 ## Branch Strategy
 
