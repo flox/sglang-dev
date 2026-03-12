@@ -83,12 +83,12 @@ Build output contains only a `sglang` CLI wrapper — there is no `bin/python`. 
 ### Two-step workflow
 
 1. **Build**: `flox build sglang-python312-cuda12_8-all-avx2` produces a store path
-2. **Runtime**: A Flox environment in `runtime-all-avx2/` wraps that store path with `PYTHONPATH` constructed from its full Nix closure
+2. **Runtime**: A separate Flox environment (`sglang-runtime`) wraps that store path with `PYTHONPATH` constructed from its full Nix closure
 
 ### Using the runtime environment
 
 ```bash
-cd runtime-all-avx2
+cd /path/to/sglang-runtime
 flox activate
 
 python3.12 -c "import sglang; print(sglang.__version__)"
@@ -98,7 +98,7 @@ python3.12 -m sglang.launch_server \
   --port 30000
 ```
 
-See [`runtime-all-avx2/README.md`](runtime-all-avx2/README.md) for full details.
+See the `sglang-runtime` environment's README for full details.
 
 ### After rebuilds
 
@@ -109,7 +109,7 @@ The store path changes on every rebuild. Update the runtime manifest:
 readlink result-sglang-python312-cuda12_8-all-avx2
 
 # Update SGLANG_STORE_PATH (and SGLANG_PYTHON if needed) in:
-#   runtime-all-avx2/.flox/env/manifest.toml
+#   sglang-runtime/.flox/env/manifest.toml
 ```
 
 ## Variant Selection Guide
@@ -173,7 +173,7 @@ SGLang builds use a **wheel-composition** approach — unlike vLLM which builds 
 ├── sglang-python312-cuda12_8-sm90-avx2.nix    # SM90 + AVX2 variant
 └── sglang-python312-cuda12_8-sm90-avx512.nix  # SM90 + AVX-512 variant
 
-runtime-all-avx2/                                # Flox runtime environment
+../sglang-runtime/                               # Flox runtime environment (separate repo)
 └── .flox/env/manifest.toml                      # Wraps all-avx2 store path with PYTHONPATH
 ```
 
