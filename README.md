@@ -102,15 +102,14 @@ See the `sglang-runtime` environment's README for full details.
 
 ### After rebuilds
 
-The store path changes on every rebuild. Update the runtime manifest:
+After publishing a new version to the Flox catalog, update the runtime environment:
 
 ```bash
-# Find the new store path
-readlink result-sglang-python312-cuda12_8-all-avx2
-
-# Update SGLANG_STORE_PATH (and SGLANG_PYTHON if needed) in:
-#   sglang-runtime/.flox/env/manifest.toml
+cd /path/to/sglang-runtime
+flox upgrade
 ```
+
+The hook re-resolves all store paths dynamically — no manual edits needed.
 
 ## Variant Selection Guide
 

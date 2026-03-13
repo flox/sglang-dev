@@ -65,7 +65,20 @@ python3.pkgs.buildPythonPackage rec {
     python3.pkgs.protobuf
     python3.pkgs.grpcio
 
+    # ── Structured output / constrained decoding ─────────────────────
+    python3.pkgs.outlines
+    python3.pkgs.lark
+    python3.pkgs.interegular
+    python3.pkgs.jsonschema
+    python3.pkgs.partial-json-parser
+
+    # ── Quantization / compilation ─────────────────────────────────
+    python3.pkgs.compressed-tensors
+    python3.pkgs.torchao
+    python3.pkgs.depyf
+
     # ── Utilities ─────────────────────────────────────────────────────
+    python3.pkgs.cloudpickle
     python3.pkgs.pillow
     python3.pkgs.tqdm
     python3.pkgs.psutil
