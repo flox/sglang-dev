@@ -6,12 +6,13 @@
 ##
 ## -------------------------------------------------------------------
 # Flox manifest version managed by Flox CLI
-version = 1
+schema-version = "1.10.0"
 
 
 ## Install Packages --------------------------------------------------
 [install]
 git.pkg-path = "git"
+git.outputs = "all"
 
 
 ## Environment Variables ---------------------------------------------
@@ -43,6 +44,4 @@ git.pkg-path = "git"
 
 ## Other Environment Options -----------------------------------------
 [options]
-systems = [
-  "x86_64-linux",
-]
+systems = ["x86_64-linux"]
