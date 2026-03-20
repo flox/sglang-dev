@@ -19,6 +19,10 @@
           import ./.flox/pkgs/sglang-python312-cuda12_8-all-avx2.nix {};
         phi-4-mini-instruct-fp8-sglang =
           import ./.flox/pkgs/phi-4-mini-instruct-fp8-sglang.nix { inherit pkgs; };
+        sglang-flox-runtime =
+          import ./.flox/pkgs/sglang-flox-runtime.nix {
+            inherit (pkgs) stdenv lib;
+          };
       };
     };
 }

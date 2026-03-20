@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# sglang-serve — Load resolved model env and exec sglang launch_server.
+#
+# Uses python3.12 -m sglang.launch_server instead of `sglang serve` because
+# `sglang serve` eagerly imports multimodal_gen which pulls diffusion deps
+# (remote_pdb, diffusers, etc.) not needed for LLM serving.
+#
+# Required env:
+#   SGLANG_MODEL            — model path or HF ID (set by sglang-resolve-model or user)
+#
+# Optional env:
+#   SGLANG_HOST                     — bind host (default: 0.0.0.0)
+#   SGLANG_PORT                     — bind port (default: 30000)
+#   SGLANG_SERVED_NAME              — served model name (default: $SGLANG_BUNDLED_FROM or "default")
+#   SGLANG_ATTENTION_BACKEND        — attention backend (e.g., triton)
+#   SGLANG_DISABLE_CUDA_GRAPH       — set 1 to pass --disable-cuda-graph
+#   SGLANG_DTYPE                    — dtype (e.g., float16)
+#   SGLANG_TP_SIZE                  — tensor parallel size
+#   SGLANG_PREFERRED_SAMPLING_PARAMS — JSON string for --preferred-sampling-params
+#   SGLANG_EXTRA_ARGS               — extra args appended to command (word-split)
+#   SGLANG_PREFLIGHT                — set 1 to check port before launch
+#   SGLANG_MODEL_ENV_FILE           — env file path (default: $FLOX_ENV_CACHE/sglang-model.env)
+#   FLOX_ENV_CACHE                  — cache directory
+
+set -euo pipefail
+
+_die() { echo "ERROR: $*" >&2; exit 1; }
+_warn() { echo "WARNING: $*" >&2; }
+
+# ── Script flags ────────────────────────────────────────────────────
+
+PRINT_CMD=0
+DRY_RUN=0
+
+while (($#)); do
+  case "$1" in
+    --print-cmd) PRINT_CMD=1; shift ;;
+    --dry-run)   DRY_RUN=1; shift ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: sglang-serve [--print-cmd] [--dry-run] [-h|--help]
+
+Script flags:
+  --print-cmd   Print the final launch_server argv to stderr before exec
+  --dry-run     Print the final argv and exit 0 (do not exec)
+  -h, --help    Show help
+
+Configuration is done entirely through environment variables.
+See script header for the full list.
+EOF
+      exit 0
+      ;;
+    *) _die "Unknown flag: $1 (all sglang options are set via env vars)" ;;
+  esac
+done
+
+# ── Load env file ───────────────────────────────────────────────────
+
+FLOX_ENV_CACHE="${FLOX_ENV_CACHE:-$HOME/.cache/flox}"
+SGLANG_MODEL_ENV_FILE="${SGLANG_MODEL_ENV_FILE:-$FLOX_ENV_CACHE/sglang-model.env}"
+
+if [[ -f "$SGLANG_MODEL_ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$SGLANG_MODEL_ENV_FILE"
+fi
+
+# ── Validate ────────────────────────────────────────────────────────
+
+: "${SGLANG_MODEL:?Set SGLANG_MODEL (run sglang-resolve-model first or set directly)}"
+
+SGLANG_HOST="${SGLANG_HOST:-0.0.0.0}"
+SGLANG_PORT="${SGLANG_PORT:-30000}"
+SGLANG_SERVED_NAME="${SGLANG_SERVED_NAME:-${SGLANG_BUNDLED_FROM:-default}}"
+
+# ── Preflight: port check ──────────────────────────────────────────
+
+if [[ "${SGLANG_PREFLIGHT:-}" == "1" ]]; then
+  if command -v ss >/dev/null 2>&1; then
+    if ss -tlnp 2>/dev/null | grep -q ":${SGLANG_PORT} "; then
+      _die "Port $SGLANG_PORT is already in use (set SGLANG_PORT to use a different port)"
+    fi
+  elif command -v lsof >/dev/null 2>&1; then
+    if lsof -iTCP:"$SGLANG_PORT" -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+      _die "Port $SGLANG_PORT is already in use (set SGLANG_PORT to use a different port)"
+    fi
+  fi
+fi
+
+# ── FlashInfer JIT cache ───────────────────────────────────────────
+
+export FLASHINFER_JIT_DIR="${FLASHINFER_JIT_DIR:-$FLOX_ENV_CACHE/flashinfer-jit}"
+mkdir -p "$FLASHINFER_JIT_DIR"
+
+# ── Info banner ─────────────────────────────────────────────────────
+
+echo "SGLang server starting" >&2
+if [[ -n "${SGLANG_BUNDLED_FROM:-}" ]]; then
+  echo "  model: $SGLANG_BUNDLED_FROM (bundled)" >&2
+else
+  echo "  model: $SGLANG_MODEL" >&2
+fi
+echo "  host: $SGLANG_HOST  port: $SGLANG_PORT" >&2
+
+# ── Build argv ──────────────────────────────────────────────────────
+
+cmd=(
+  python3.12 -m sglang.launch_server
+  --model-path "$SGLANG_MODEL"
+  --host "$SGLANG_HOST"
+  --port "$SGLANG_PORT"
+  --served-model-name "$SGLANG_SERVED_NAME"
+)
+
+# Conditional flags (only when env var is set and non-empty)
+[[ -n "${SGLANG_ATTENTION_BACKEND:-}" ]] && cmd+=(--attention-backend "$SGLANG_ATTENTION_BACKEND")
+[[ "${SGLANG_DISABLE_CUDA_GRAPH:-}" == "1" ]] && cmd+=(--disable-cuda-graph)
+[[ -n "${SGLANG_DTYPE:-}" ]] && cmd+=(--dtype "$SGLANG_DTYPE")
+[[ -n "${SGLANG_TP_SIZE:-}" ]] && cmd+=(--tp-size "$SGLANG_TP_SIZE")
+[[ -n "${SGLANG_PREFERRED_SAMPLING_PARAMS:-}" ]] && cmd+=(--preferred-sampling-params "$SGLANG_PREFERRED_SAMPLING_PARAMS")
+
+# Extra args (word-split intentionally)
+if [[ -n "${SGLANG_EXTRA_ARGS:-}" ]]; then
+  # shellcheck disable=SC2206
+  cmd+=($SGLANG_EXTRA_ARGS)
+fi
+
+# ── Print / dry-run / exec ──────────────────────────────────────────
+
+if ((PRINT_CMD || DRY_RUN)); then
+  printf 'CMD:' >&2
+  for a in "${cmd[@]}"; do printf ' %q' "$a" >&2; done
+  printf '\n' >&2
+fi
+
+if ((DRY_RUN)); then
+  exit 0
+fi
+
+exec "${cmd[@]}"
