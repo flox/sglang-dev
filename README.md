@@ -100,6 +100,35 @@ python3.12 -m sglang.launch_server \
 
 See the `sglang-runtime` environment's README for full details.
 
+### Runtime scripts (`sglang-flox-runtime`)
+
+The `sglang-flox-runtime` package provides runtime scripts for model
+resolution and server launch. It is installed alongside the SGLang
+Python/CUDA package in a consuming environment.
+
+| Script | Purpose |
+|--------|---------|
+| `sglang-resolve-model` | Resolves bundled HF models from `$FLOX_ENV/share/models/hub/`, applies tokenizer compat shim, writes per-model env file |
+| `sglang-serve` | Loads env file, builds `launch_server` argv from env vars, `exec`s the server |
+
+Build and publish:
+
+```bash
+flox build sglang-flox-runtime
+flox publish -o flox sglang-flox-runtime
+```
+
+The consuming environment (`sglang-runtime`) installs it via:
+
+```toml
+[install]
+sglang-flox-runtime.pkg-path = "flox/sglang-flox-runtime"
+sglang-flox-runtime.systems = ["x86_64-linux"]
+
+[services.sglang]
+command = "sglang-resolve-model && sglang-serve"
+```
+
 ### After rebuilds
 
 After publishing a new version to the Flox catalog, update the runtime environment:
@@ -170,7 +199,12 @@ SGLang builds use a **wheel-composition** approach — unlike vLLM which builds 
 ├── sglang-python312-cuda12_8-sm61-avx512.nix  # SM61 + AVX-512 variant
 ├── ...                                         # SM75, SM80, SM86, SM89, SM100, SM120
 ├── sglang-python312-cuda12_8-sm90-avx2.nix    # SM90 + AVX2 variant
-└── sglang-python312-cuda12_8-sm90-avx512.nix  # SM90 + AVX-512 variant
+├── sglang-python312-cuda12_8-sm90-avx512.nix  # SM90 + AVX-512 variant
+└── sglang-flox-runtime.nix                    # Runtime scripts package
+
+scripts/
+  sglang-resolve-model                           # Bundled model resolution
+  sglang-serve                                   # Server launch wrapper
 
 ../sglang-runtime/                               # Flox runtime environment (separate repo)
 └── .flox/env/manifest.toml                      # Wraps all-avx2 store path with PYTHONPATH
